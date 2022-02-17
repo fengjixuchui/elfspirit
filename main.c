@@ -27,6 +27,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include "addsec.h"
 #include "injectso.h"
 #include "delsec.h"
@@ -41,10 +45,30 @@ char file_name[LENGTH];
 char config_name[LENGTH];
 char arch[LENGTH];
 char ver[LENGTH];
+char ver_elfspirt[LENGTH];
 char elf_name[LENGTH];
 char function[LENGTH];
 uint32_t size;
 uint32_t off;
+parser_opt_t po;
+
+/**
+ * @description: obtain tool version
+ */
+static int get_version(char *ver, size_t len) {
+    int fd;
+    int ret;
+
+    fd = open("./VERSION", O_RDONLY);
+    if (fd < 0) {
+        perror("open");
+        return -1;
+    }
+
+    ret = read(fd, ver, len);
+    close(fd);
+    return ret;
+}
 
 /**
  * @description: initialize arguments
@@ -56,8 +80,11 @@ static void init() {
     memset(function, 0, LENGTH);
     size = 0;
     off = 0;
+    get_version(ver_elfspirt, LENGTH);
+    po.index = 0;
+    memset(po.options, 0, sizeof(po.options));
 }
-static const char *shortopts = "n:z:f:c:a:o:v:h::";
+static const char *shortopts = "n:z:f:c:a:o:v:h::AHSPL";
 
 static const struct option longopts[] = {
     {"section-name", required_argument, NULL, 'n'},
@@ -81,6 +108,7 @@ static const char *help =
     "  delsec           Delete a section of ELF file\n"
     "  injectso         Inject dynamic link library statically \n"
     "  delshtab         Delete section header table\n"
+    "  elfspirit        Parse ELF file statically like readelf\n"
     "Currently defined options:\n"
     "  -n, --section-name=<section name>         Set section name\n"
     "  -z, --section-size=<section size>         Set section size\n"
@@ -90,13 +118,18 @@ static const char *help =
     "  -o, --offset=<injection offset>           Offset of injection point\n"
     "  -v, --version-libc=<libc version>         Libc.so or ld.so version\n"
     "  -h, --help[={none|English|Chinese}]       Display this output\n"
+    "  -A, (no argument)                         Display all ELF file infomation\n"
+    "  -H, (no argument)                         Display the ELF file header\n"
+    "  -S, (no argument)                         Display the sections' header\n"
+    "  -P, (no argument)                         Display the program headers\n"
+    "  -L, (no argument)                         Display the link information\n"
     "Detailed Usage: \n"
     "  elfspirit addsec   [-n]<section name> [-z]<section size> [-o]<offset(optional)> ELF\n"
     "  elfspirit injectso [-n]<section name> [-f]<so name> [-c]<configure file>\n"
     "                     [-v]<libc version> ELF\n"
     "  elfspirit delsec   [-n]<section name> ELF\n"
     "  elfspirit delshtab ELF\n"
-    "  elfspirit parse ELF\n";
+    "  elfspirit parse -A ELF\n";
 
 static const char *help_chinese = 
     "用法: elfspirit [功能] [选项]<参数>... ELF\n"
@@ -105,7 +138,8 @@ static const char *help_chinese =
     "  delsec           删除一个节\n"
     "  injectso         静态注入一个so\n"
     "  delshtab         删除节头表\n"
-    "Currently defined options:\n"
+    "  elfspirit        ELF文件格式分析, 类似于readelf\n"
+    "支持的选项:\n"
     "  -n, --section-name=<section name>         设置节名\n"
     "  -z, --section-size=<section size>         设置节大小\n"
     "  -f, --file-name=<file name>               包含代码的文件名称(如某个so库)\n"
@@ -114,20 +148,30 @@ static const char *help_chinese =
     "  -o, --offset=<injection offset>           注入点的偏移位置(预留选项，非必须)\n"
     "  -v, --version-libc=<libc version>         libc或者ld的版本\n"
     "  -h, --help[={none|English|Chinese}]       帮助\n"
-    "Detailed Usage: \n"
+    "  -A, 不需要参数                    显示ELF解析器解析的所有信息\n"
+    "  -H, 不需要参数                    显示ELF头\n"
+    "  -S, 不需要参数                    显示ELF节头\n"
+    "  -P, 不需要参数                    显示ELF程序头\n"
+    "  -L, 不需要参数                    显示ELF链接\n"
+    "细节: \n"
     "  elfspirit addsec   [-n]<section name> [-z]<section size> [-o]<offset(optional)> ELF\n"
     "  elfspirit injectso [-n]<section name> [-f]<so name> [-c]<configure file>\n"
     "                     [-v]<libc version> ELF\n"
     "  elfspirit delsec   [-n]<section name> ELF\n"
     "  elfspirit delshtab ELF\n"
-    "  elfspirit parse ELF\n";
+    "  elfspirit parse -A ELF\n";
 
 static void readcmdline(int argc, char *argv[]) {
     int opt;
     if (argc == 1) {
         fputs(help, stdout);
+        printf("Current version: %s\n", ver_elfspirt);
     }
     while((opt = getopt_long(argc, argv, shortopts, longopts, NULL)) != EOF) {
+        /* The number of options cannot be greater than the array capacity */
+        if (po.index >= sizeof(po.options)) {
+            break;
+        }
         switch (opt) {
             // set section name
             case 'n':
@@ -178,11 +222,33 @@ static void readcmdline(int argc, char *argv[]) {
                 printf("%s\n", optarg);
                 if (optarg != NULL && !strcmp(optarg, "Chinese")){       
                     fputs(help_chinese, stdout);
+                    printf("当前版本: %s\n", ver_elfspirt);
                 }
                 else {
-                    fputs(help, stdout);                
+                    fputs(help, stdout);
+                    printf("Current version: %s\n", ver_elfspirt);                
                 }                    
                            
+                break;
+
+            /* ELF parser's options */
+            case 'A':
+                po.options[po.index++] = ALL;
+                break;
+            case 'H':
+                po.options[po.index++] = HEADERS;
+                break;
+            
+            case 'S':
+                po.options[po.index++] = SECTIONS;
+                break;
+
+            case 'P':
+                po.options[po.index++] = SEGMENTS;
+                break;
+
+            case 'L':
+                po.options[po.index++] = LINK;
                 break;
             
             default:
@@ -219,9 +285,9 @@ static void readcmdline(int argc, char *argv[]) {
         delete_shtab(elf_name);
     }
 
-    /* */
+    /* ELF parser */
     if (!strcmp(function, "parse")) {
-        parse(elf_name);
+        parse(elf_name, &po);
     }
 
 #ifdef DEBUG
