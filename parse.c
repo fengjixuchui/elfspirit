@@ -229,7 +229,7 @@ static void display_header32(handle_t32 *h) {
             break;
         
         default:
-            tmp = "An unknown type";
+            tmp = UNKOWN;
             break;
     }
     PRINT_HEADER_EXP("e_type:", h->ehdr->e_type, tmp);
@@ -312,7 +312,7 @@ static void display_header32(handle_t32 *h) {
             break;
         
         default:
-            tmp = "An unknown machine";
+            tmp = UNKOWN;
             break;
     }
     PRINT_HEADER_EXP("e_machine:", h->ehdr->e_machine, tmp);
@@ -327,7 +327,7 @@ static void display_header32(handle_t32 *h) {
             break;
 
         default:
-            tmp = "Known version";
+            tmp = UNKOWN;
             break;
     }
     PRINT_HEADER_EXP("e_version:", h->ehdr->e_version, tmp);
@@ -368,7 +368,7 @@ static void display_header64(handle_t64 *h) {
             break;
         
         default:
-            tmp = "An unknown type";
+            tmp = UNKOWN;
             break;
     }
     PRINT_HEADER_EXP("e_type:", h->ehdr->e_type, tmp);
@@ -451,7 +451,7 @@ static void display_header64(handle_t64 *h) {
             break;
         
         default:
-            tmp = "An unknown machine";
+            tmp = UNKOWN;
             break;
     }
     PRINT_HEADER_EXP("e_machine:", h->ehdr->e_machine, tmp);
@@ -466,7 +466,7 @@ static void display_header64(handle_t64 *h) {
             break;
 
         default:
-            tmp = "Known version";
+            tmp = UNKOWN;
             break;
     }
     PRINT_HEADER_EXP("e_version:", h->ehdr->e_version, tmp);
@@ -497,7 +497,7 @@ static void display_section32(handle_t32 *h) {
         name = h->mem + h->shstrtab->sh_offset + h->shdr[i].sh_name;
         if (validated_offset(name, h->mem, h->mem + h->size)) {
             ERROR("Corrupt file format\n");
-            return -1;
+            exit(-1);
         }
 
         switch (h->shdr[i].sh_type) {
@@ -566,6 +566,7 @@ static void display_section32(handle_t32 *h) {
                 break;
             
             default:
+                tmp = UNKOWN;
                 break;
         }
 
@@ -589,7 +590,7 @@ static void display_section64(handle_t64 *h) {
         name = h->mem + h->shstrtab->sh_offset + h->shdr[i].sh_name;
         if (validated_offset(name, h->mem, h->mem + h->size)) {
             ERROR("Corrupt file format\n");
-            return -1;
+            exit(-1);
         }
 
         switch (h->shdr[i].sh_type) {
@@ -658,6 +659,7 @@ static void display_section64(handle_t64 *h) {
                 break;
             
             default:
+                tmp = UNKOWN;
                 break;
         }
 
@@ -725,6 +727,7 @@ static void display_segment32(handle_t32 *h) {
                 break;
             
             default:
+                tmp = UNKOWN;
                 break;
         }
         strcpy(flag, "   ");
@@ -739,7 +742,9 @@ static void display_segment32(handle_t32 *h) {
             name = h->mem + h->shstrtab->sh_offset + h->shdr[j].sh_name;
             if (h->shdr[j].sh_addr >= h->phdr[i].p_vaddr && h->shdr[j].sh_addr + h->shdr[j].sh_size <= h->phdr[i].p_vaddr + h->phdr[i].p_memsz && h->shdr[j].sh_type != SHT_NULL) {
                 if (h->shdr[j].sh_flags >> 1 & 0x1) {
-                    printf(" %s", name);
+                    if (name != NULL) {
+                        printf(" %s", name);
+                    }
                 }
             }    
         }
@@ -796,6 +801,7 @@ static void display_segment64(handle_t64 *h) {
                 break;
             
             default:
+                tmp = UNKOWN;
                 break;
         }
         strcpy(flag, "   ");
@@ -810,7 +816,9 @@ static void display_segment64(handle_t64 *h) {
             name = h->mem + h->shstrtab->sh_offset + h->shdr[j].sh_name;
             if (h->shdr[j].sh_addr >= h->phdr[i].p_vaddr && h->shdr[j].sh_addr + h->shdr[j].sh_size <= h->phdr[i].p_vaddr + h->phdr[i].p_memsz && h->shdr[j].sh_type != SHT_NULL) {
                 if (h->shdr[j].sh_flags >> 1 & 0x1) {
-                    printf(" %s", name);
+                    if (name != NULL) {
+                        printf(" %s", name);
+                    }                    
                 }
             }    
         }
@@ -833,9 +841,16 @@ static void display_dyninfo32(handle_t32 *h) {
     Elf32_Dyn *dyn;
     for (int i = 0; i < h->ehdr->e_shnum; i++) {
         name = h->mem + h->shstrtab->sh_offset + h->shdr[i].sh_name;
+
+        if (validated_offset(name, h->mem, h->mem + h->size)) {
+            ERROR("Corrupt file format\n");
+            exit(-1);
+        }
+
         if (!strcmp(name, ".dynstr")) {
             dynstr = i;
         }
+
         if (!strcmp(name, ".dynamic")) {
             dynamic = i;
         }
@@ -849,7 +864,6 @@ static void display_dyninfo32(handle_t32 *h) {
     PRINT_DYN_TITLE("Tag", "Type", "Name/Value");
     
     for(int i = 0; i < count; i++) {
-        tmp = "";
         memset(value, 0, 50);
         snprintf(value, 50, "0x%x", dyn[i].d_un.d_val);
         switch (dyn[i].d_tag) {
@@ -1167,6 +1181,7 @@ static void display_dyninfo32(handle_t32 *h) {
                 break;
             
             default:
+                tmp = UNKOWN;
                 break;
         }
         PRINT_DYN(dyn[i].d_tag, tmp, value);
@@ -1183,9 +1198,15 @@ static void display_dyninfo64(handle_t64 *h) {
     Elf64_Dyn *dyn;
     for (int i = 0; i < h->ehdr->e_shnum; i++) {
         name = h->mem + h->shstrtab->sh_offset + h->shdr[i].sh_name;
+        if (validated_offset(name, h->mem, h->mem + h->size)) {
+            ERROR("Corrupt file format\n");
+            exit(-1);
+        }
+
         if (!strcmp(name, ".dynstr")) {
             dynstr = i;
         }
+
         if (!strcmp(name, ".dynamic")) {
             dynamic = i;
         }
@@ -1199,7 +1220,6 @@ static void display_dyninfo64(handle_t64 *h) {
     PRINT_DYN_TITLE("Tag", "Type", "Name/Value");
     
     for(int i = 0; i < count; i++) {
-        tmp = "";
         memset(value, 0, 50);
         snprintf(value, 50, "0x%x", dyn[i].d_un.d_val);
         switch (dyn[i].d_tag) {
@@ -1517,6 +1537,7 @@ static void display_dyninfo64(handle_t64 *h) {
                 break;
             
             default:
+                tmp = UNKOWN;
                 break;
         }
         PRINT_DYN(dyn[i].d_tag, tmp, value);
