@@ -31,6 +31,7 @@
 #include <sys/mman.h>
 #include <elf.h>
 #include "common.h"
+#include "cJSON/cJSON.h"
 
 int MODE;
 int ARCH;
@@ -306,13 +307,18 @@ int is_sec_addr(char *elf_name, int offset) {
  * @param {char} *elf_name original file name
  * @param {char} *elf_map
  * @param {uint32_t} map_size
+ * @param {uint32_t} is_new
  * @return {*}
  */
-int create_file(char *elf_name, char *elf_map, uint32_t map_size) {
+int create_file(char *elf_name, char *elf_map, uint32_t map_size, uint32_t is_new) {
     /* new file */
     char new_name[PATH_LENGTH_NEW];
     memset(new_name, 0, PATH_LENGTH_NEW);
-    snprintf(new_name, PATH_LENGTH_NEW, "%s_new", elf_name);
+    if (is_new) 
+        snprintf(new_name, PATH_LENGTH_NEW, "%s.new", elf_name);
+    else
+        strncpy(new_name, elf_name, PATH_LENGTH_NEW);
+        
     int fd_new = open(new_name, O_RDWR|O_CREAT|O_TRUNC, 0777);
     if (fd_new < 0) {
         ERROR("open fd_new\n");
@@ -323,4 +329,33 @@ int create_file(char *elf_name, char *elf_map, uint32_t map_size) {
     INFO("create %s\n", new_name);
     close(fd_new);
     return 0;
+}
+
+/**
+ * @description: Create json object from json file
+ * @param {char} *name original json file name
+ * @return {*}
+ */
+cJSON *get_json_object(char *name) {
+    FILE *fp;
+    int len;
+    char *content;
+    cJSON *cJsonObject;
+
+    fp = fopen(name, "rb");
+    if (fp <= 0) {
+        perror("fopen");
+        return NULL;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    len = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    content = (char *)malloc(len + 1);      // len + 1, fix off-by-one
+    memset(content, 0, len + 1);        
+    fread(content, 1, len, fp);
+    cJsonObject = cJSON_Parse(content);
+    fclose(fp);
+    free(content);
+    return cJsonObject;
 }

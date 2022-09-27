@@ -22,6 +22,8 @@
  SOFTWARE.
 */
 
+#include "cJSON/cJSON.h"
+
 #define LENGTH 64
 #define PATH_LENGTH LENGTH
 /* generate new file name */
@@ -125,6 +127,14 @@ int is_sec_addr(char *elf_name, int offset);
  * @param {char} *elf_name original file name
  * @param {char} *elf_map
  * @param {uint32_t} map_size
+ * @param {uint32_t} is_new
  * @return {*}
  */
-int create_file(char *elf_name, char *elf_map, uint32_t map_size);
+int create_file(char *elf_name, char *elf_map, uint32_t map_size, uint32_t is_new);
+
+/**
+ * @description: Create json object from json file
+ * @param {char} *name original json file name
+ * @return {*}
+ */
+cJSON *get_json_object(char *name);
